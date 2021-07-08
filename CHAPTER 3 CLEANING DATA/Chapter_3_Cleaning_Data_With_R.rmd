@@ -1,0 +1,1019 @@
+---
+title: "Chapter_3_Cleaning_Data_With_R"
+author: "Ravi Mummigatti"
+date: "7/7/2021"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    theme: flatly
+    highlight: tango
+    code_folding: show
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+# Introduction
+
+A significant part of data science involves acquiring raw data and
+getting it into a form ready for analysis. It is estimated that data
+scientists spend 80% of their time cleaning and manipulating data, and
+only 20% of their time actually analyzing it or building models from it.
+
+When we receive raw data, we have to do a number of things before we're
+ready to analyze it, possibly including:
+
+-   diagnosing the "tidiness" of the data --- how much data cleaning we
+    will have to do
+
+-   reshaping the data --- getting the right rows and columns for
+    effective analysis
+
+-   combining multiple files
+
+-   changing the types of values --- how we fix a column where numerical
+    values are stored as strings, for example
+
+-   dropping or filling missing values - how we deal with data that is
+    incomplete or missing
+
+-   manipulating strings to represent the data better
+
+We will go through the techniques data scientists use to accomplish
+these goals by looking at some "unclean" datasets and trying to get them
+into a good, clean state. Along the way we will use the powerful
+tidyverse packages dplyr and tidyr to get our data squeaky clean!
+
+We have been provided an example of data representing exam scores from
+`1000` students in an online math class.
+
+These data frames, which you can view in the rendered notebook, are hard
+to work with. They're separated into multiple tables, and the values
+don't lend themselves well to analysis. We would like to plot the exam
+score average against the age of the students in the class , which is
+not an easy task with given data.
+
+In the ensuing exercises, we will transform this data (given in 10 csv
+files) so that performing a visualization would be simple
+
+```{rsetup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE , cache.lazy = FALSE , warning = FALSE , message = FALSE , fig.width = 8 , fig.height = 5)
+```
+
+```{r message=FALSE, warning=FALSE}
+# load libraries
+library(tidyverse)
+```
+
+Let us first look at two data sets "exams_0" and "exams_1"
+
+```{r message=FALSE, warning=FALSE}
+# load data frame
+students_1 <- read_csv('exams_0.csv')
+students_2 <- read_csv('exams_1.csv')
+```
+
+```{r}
+# inspect data frame
+head(students_1)
+head(students_2)
+```
+
+# Diagnose the Data
+
+We often describe data that is easy to analyze and visualize as "tidy
+data". What does it mean to have tidy data?
+
+For data to be tidy, it must have:
+
+-   Each variable as a separate column
+
+-   Each row as a separate observation
+
+For example, we would want to reshape a table like:
+
+| Account    | Checkings | Savings |
+|------------|-----------|---------|
+| "12456543" | 8500      | 8900    |
+| "12283942" | 6410      | 8020    |
+| "12839485" | 78000     | 92000   |
+
+Into a table that looks more like:
+
+| Account    | Account Type | Amount |
+|------------|--------------|--------|
+| "12456543" | "Checking"   | 8500   |
+| "12456543" | "Savings"    | 8900   |
+| "12283942" | "Checking"   | 6410   |
+| "12283942" | "Savings"    | 8020   |
+| "12839485" | "Checking"   | 78000  |
+| "12839485" | "Savings"    | 920000 |
+
+The first step of diagnosing whether or not a dataset is tidy is using
+base R and dplyr functions to explore/probe the dataset.
+
+You've seen most of the functions we often use to diagnose a dataset for
+cleaning. Some of the most useful ones are:
+
+-   `head()` --- display the first 6 rows of the table
+
+-   `summary()` --- display the summary statistics of the table
+
+-   `colnames()` --- display the column names of the table
+
+We have been provided two data frames, `grocery_1` and `grocery_2`.
+
+1.  Begin by viewing the `head() , summary() and colnames()` of both
+    `grocery_1` and `grocery_2`.
+
+2.  Which data frame is "clean", tidy, and ready for analysis?
+
+```{r message=FALSE, warning=FALSE}
+# load the data sets
+grocery_1 <- read_csv("grocery_1.csv")
+grocery_2 <- read_csv("grocery_2.csv")
+```
+
+```{r}
+# top rows of grocery_1 and grocery_2
+head(grocery_1)
+head(grocery_2)
+```
+
+```{r}
+# summary of grocery_1 and grocery_2
+summary(grocery_1)
+summary(grocery_2)
+```
+
+```{r}
+# column names of grocery_1 and grocery_2
+print(colnames(grocery_1))
+print(colnames(grocery_2))
+```
+
+*Looking at the two data sets it is clear that "grocery_2" follows the
+tidy format wherein each variable has a separate column and each row is
+a separate observation*
+
+# Dealing with Multiple Files
+
+Often, we have the same data separated out into multiple files.Let's say
+that you have a ton of files following the filename structure:
+`'file_1.csv'`, `'file_2.csv'`, `'file_3.csv'`, and so on. The power of
+dplyr and tidyr is mainly in being able to manipulate large amounts of
+structured data, so you want to be able to get all of the relevant
+information into one table so that you can analyze the aggregate data.
+
+You can combine the base R functions `list.files()` and `lapply()` with
+readr and dplyr to organize this data better:
+
+    files <- list.files(pattern = "file_.*csv")
+    df_list <- lapply(files,read_csv)
+    df <- bind_rows(df_list)
+
+-   The first line uses `list.files()` and a [regular
+    expression](https://www.codecademy.com/courses/practical-data-cleaning/lessons/nlp-regex-conceptual/exercises/introduction),
+    a sequence of characters describing a pattern of text that should be
+    matched, to find any file in the current directory that starts with
+    `'file_'` and has an extension of `csv`, storing the name of each
+    file in a vector `files`
+
+-   The second line uses `lapply()` to read each file in `files` into a
+    data frame with `read_csv()`, storing the data frames in `df_list`
+
+-   The third line then concatenates all of those data frames together
+    with dplyr's `bind_rows()` function
+
+You have 10 different files containing 100 students each. These files
+follow the naming structure:
+
+-   `exams_0.csv ; exams_1.csv ;`... up to `exams_9.csv`
+
+You are going to read each file into an individual data frame and then
+combine all of the entries into one data frame.
+
+1.  First, create a variable called `student_files` and set it equal to
+    the `list.files()` of all of the CSV files we want to import.
+
+```{r}
+# create a list of files with a pattern
+student_files = list.files(pattern = "exams_.*csv")
+
+# print the list of files to download
+print(student_files)
+```
+
+2.  Read each file in `student_files` into a data frame using `lapply()`
+    and save the result to `df_list`.
+
+```{r message=FALSE, warning=FALSE}
+# read each file into a data frame using lappy method
+df_list <- lapply(student_files,read_csv)
+```
+
+3.  Concatenate all of the data frames in `df_list` into one data frame
+    called `students`.
+
+4.  Inspect `students`. Save the number of rows in `students` to
+    `nrow_students`
+
+```{r}
+# combine each data frame by rows i.e. append one after the other "bind_rows"
+df <- bind_rows(df_list)
+
+# inspect
+df
+
+# print number of rows and number of columns
+print(nrow(df))
+print(ncol(df))
+```
+
+# Reshaping your Data
+
+Since we want
+
+-   Each variable as a separate column
+
+-   Each row as a separate observation
+
+We would want to reshape a table like:
+
+| *Account*  | *Checking* | *Savings* |
+|------------|------------|-----------|
+| "12456543" | 8500       | 8900      |
+| "12283942" | 6410       | 8020      |
+| "12839485" | 78000      | 92000     |
+
+Into a table that looks more like:
+
+| *Account*  | *Account Type* | *Amount* |
+|------------|----------------|----------|
+| "12456543" | "Checking"     | 8500     |
+| "12456543" | "Savings"      | 8900     |
+| "12283942" | "Checking"     | 6410     |
+| "12283942" | "Savings"      | 8020     |
+| "12839485" | "Checking"     | 78000    |
+| "12839485" | "Savings"      | 920000   |
+
+We can use tidyr's `gather()` function to do this transformation.
+`gather()` takes a data frame and the columns to unpack:
+
+    df %>%
+      gather('Checking','Savings',key='Account Type',value='Amount')
+
+The arguments you provide are:
+
+-   `df`: the data frame you want to gather, which can be piped into
+    `gather()`
+
+-   `Checking` and `Savings`: the columns of the old data frame that you
+    want to turn into variables
+
+-   `key`: what to call the column of the new data frame that stores the
+    variables
+
+-   `value`: what to call the column of the new data frame that stores
+    the values
+
+We will now re-shape our student marks data frame.
+
+There is a column for the scores on the `fractions` exam, and a column
+for the scores on the `probability` exam.
+
+We want to make each row an observation, so we want to transform this
+table to look like:
+
+| *full_name*      | *exam*        | *score* | *gender_age* | *grade* |
+|------------------|---------------|---------|--------------|---------|
+| "First Student"  | "fractions"   | score%  | ...          | ...     |
+| "First Student"  | "probability" | score%  | ...          | ...     |
+| "Second Student" | "fractions"   | score%  | ...          | ...     |
+| "Second Student" | "probability" | score%  | ...          | ...     |
+| ...              | ...           | ...     | ...          | ...     |
+
+-   Use `gather` to create a new table (still called `students`) that
+    follows this structure. Then view the `head()` of students.
+
+```{r}
+# print the original column names before reshaping
+original_col_names <- colnames(df)
+print(original_col_names)
+```
+
+```{r}
+# gather the "fractions" and "probability" columns
+# new column name for the gathered column will be stored in "exam"
+# new values of the gathered columns will be stored in "score"
+df <- df %>%
+    gather("fractions" , "probability" , 
+           key = "exam" , 
+           value = "score")
+# inspect
+head(df)
+```
+
+-   Save the columns names of the updated `students` data frame to
+    `gathered_col_names` and print it.
+
+```{r}
+gathered_col_names <- colnames(df)
+print(gathered_col_names)
+```
+
+-   The dplyr function `count()` takes a data frame and a column as
+    arguments and returns a table with counts of the unique values in
+    the named column.Find the count of each unique value in the `exam`
+    column. Save the result to `exam_counts` and view `exam_counts`.
+
+```{r}
+# how manu students took each exam
+exam_count <- df %>%
+    count(exam)
+
+# print the result
+exam_count
+```
+
+# Dealing with Duplicates
+
+Often we see duplicated rows of data in the data frames we are working
+with. This could happen due to errors in data collection or in saving
+and loading the data.
+
+To check for duplicates, we can use the base R function `duplicated()`,
+which will return a logical vector telling us which rows are duplicate
+rows.Let's say we have a data frame `fruits` that represents this table:
+
+| *item*       | *price*  | *calories* |
+|--------------|----------|------------|
+| "banana"     | "\$1"    | 105        |
+| "apple"      | "\$0.75" | 95         |
+| "apple"      | "\$0.75" | 95         |
+| "peach"      | "\$3"    | 55         |
+| "peach"      | "\$4"    | 55         |
+| "clementine" | "\$2.5"  | 35         |
+
+If we call `fruits %>% duplicated()`, we would get the following vector:
+
+    >> [1] FALSE FALSE TRUE FALSE FALSE FALSE
+
+We can see that the third row, which represents an `"apple"` with price
+`"$0.75"` and `95` calories, is a duplicate row. Every value in this row
+is the same as in another row (the previous row).
+
+We can use the dplyr `distinct()` function to remove all rows of a data
+frame that are duplicates of another row.
+
+If we call `fruits %>% distinct()`, we would get the table:
+
+| *item*       | *price*  | *calories* |
+|--------------|----------|------------|
+| "banana"     | "\$1"    | 105        |
+| "apple"      | "\$0.75" | 95         |
+| "peach"      | "\$3"    | 55         |
+| "peach"      | "\$4"    | 55         |
+| "clementine" | "\$2.5"  | 35         |
+
+The `"apple"` row was deleted because it was exactly the same as another
+row. But the two `"peach"` rows remain because there is a difference in
+the *price* column.
+
+If we wanted to remove every row with a duplicate value in the *item*
+column, we could specify a `subset`:
+
+    fruits %>%
+      distinct(item,.keep_all=TRUE)
+
+-   The `students` data frame has a column `id` that is neither unique
+    nor required for our analysis. Drop the `id` column from the data
+    frame and save the result to `students`. View the `head()` of
+    `students`
+
+```{r}
+# drop the id column
+df_new <- df %>%
+    select(-id)
+
+# inspeact new data frame
+head(df_new)
+```
+
+-   It seems like in the data collection process, some rows may have
+    been recorded twice. Use the `duplicated()` function on the
+    `students` data frame to make a vector object called `duplicates`.
+
+-   `table()` is a base R function that takes any R object as an
+    argument and returns a table with the counts of each unique value in
+    the object.Pipe the result from the previous checkpoint into
+    `table()` to see how many rows are exact duplicates. Make sure to
+    save the result to `duplicates`, and view `duplicates`.
+
+```{r}
+# find and count duplicated rows
+duplicate_df <- df_new %>%
+  duplicated() %>%
+    table()
+duplicate_df
+```
+
+There are 24 duplicate values.Update the value of `students` to be the
+`students` data frame with only unique/distinct rows
+
+```{r}
+# use the distinct() method to remove duplicate values
+df_final <- df_new %>%
+  distinct()
+```
+
+Use the `duplicated()` function again to make an object called
+`df_analysis` after dropping the duplicates. Pipe the result into
+`table()` to see if any duplicates remain, and view `df_analysis`. Are
+there any `TRUE`s left?
+
+```{r}
+# final dataframe putting it all together
+students <- df %>%
+    # remove id column
+    select(-id) %>%
+    # use the distinct() method to remove duplicate values
+    distinct()
+
+# check for duplicate values
+students %>%
+  duplicated() %>%
+    table()
+```
+
+There are no duplicate values. We can now use the "df_analysis" which is
+in tidy form.
+
+# Splitting By Index
+
+In trying to get clean data, we want to make sure each column represents
+one type of measurement. Often, multiple measurements are recorded in
+the same column, and we want to separate these out so that we can do
+individual analysis on each variable.
+
+Let's say we have a column "birthday" with data formatted in MMDDYYYY
+format. In other words, "11011993" represents a birthday of November 1,
+1993. We want to split this data into day, month, and year so that we
+can use these columns as separate features.
+
+In this case, we know the exact structure of these strings. The first
+two characters will always correspond to the month, the second two to
+the day, and the rest of the string will always correspond to year. We
+can easily break the data into three separate columns by splitting the
+strings into substrings using `str_sub()`, a helpful function from the
+stringr package:
+
+    # Create the 'month' column
+    df %>%
+      mutate(month = str_sub(birthday,1,2))
+     
+    # Create the 'day' column
+    df %>%
+      mutate(day = str_sub(birthday,3,4))
+     
+    # Create the 'year' column
+    df %>%
+      mutate(year = str_sub(birthday,5))
+
+-   The first command takes the characters starting at index `1` and
+    ending at index `2` of each value in the `birthday` column and puts
+    it into a `month` column.
+
+-   The second command takes the characters starting at index `3` and
+    ending at index `4` of each value in the `birthday` column and puts
+    it into a `day` column.
+
+-   The third command takes the characters starting at index `5` and
+    ending at the end of the value in the `birthday` column and puts it
+    into a `year` column.
+
+This would transform a table like:
+
+| *id* | *birthday* |
+|------|------------|
+| 1011 | "12241989" |
+| 1112 | "10311966" |
+| 1113 | "01052011" |
+
+: into a table like:
+
+| *id* | *birthday* | *month* | *day* | *year* |
+|------|------------|---------|-------|--------|
+| 1011 | "12241989" | "12"    | "24"  | "1989" |
+| 1112 | "10311966" | "10"    | "31"  | "1966" |
+| 1113 | "01052011" | "01"    | "05"  | "2011" |
+
+-   Print out the columns of the `students` data frame.
+
+```{r}
+colnames(students)
+```
+
+-   The column `gender_age` sounds like it contains both `gender` and
+    `age`! View the `head()` of `students` to see what kind of data
+    `gender_age` contains.
+
+```{r}
+head(students)
+```
+
+-   It looks like the first character of the values in `gender_age`
+    contains the gender, while the rest of the string contains the age.
+    Let's separate out the gender data into a new column called
+    `gender`. Save the result to `students`, and view the `head()`.
+
+-   We don't need that `gender_age` column anymore. Drop `gender_age`
+    from `students`, and save the result to `students`. View the
+    `head()` of `students`
+
+```{r}
+students <- students %>%
+    # separate the gender which starts at 1st index and ends at 1st index
+    mutate(gender = str_sub(gender_age , 1,1)) %>%
+    # separate the age which starts at 2nd index
+    mutate(age = str_sub(gender_age , 2)) %>%
+    # drop gender_age column
+    select(-gender_age)
+
+head(students)
+```
+
+# Splitting By Character
+
+Let's say we have a column called `"type"` with data entries in the
+format `"admin_US"` or `"user_Kenya"`, as shown in the table below.
+
+| *id* | *type*         |
+|------|----------------|
+| 1011 | "user_Kenya"   |
+| 1112 | "admin_US"     |
+| 1113 | "moderator_UK" |
+
+Just like we saw before, this column actually contains two types of
+data. One seems to be the user type (with values like "admin" or "user")
+and one seems to be the country this user is in (with values like "US"
+or "Kenya").
+
+We can no longer just split along the first 4 characters because `admin`
+and `user` are of different lengths. Instead, we know that we want to
+split along the `"_"`. We can thus use the tidyr function `separate()`
+to split this column into two, separate columns:
+
+    # Create the 'user_type' and 'country' columns
+    df %>%
+      separate(type,c('user_type','country'),'_')
+
+-   `type` is the column to split
+
+-   `c('user_type','country')` is a vector with the names of the two new
+    columns
+
+-   `'_'` is the character to split on
+
+This would transform the table above into a table like:
+
+| *id* | *type*         | *country* | *usertype*  |
+|------|----------------|-----------|-------------|
+| 1011 | "user_Kenya"   | "Kenya"   | "user"      |
+| 1112 | "admin_US"     | "US"      | "admin"     |
+| 1113 | "moderator_UK" | "UK"      | "moderator" |
+
+```{r}
+head(students)
+```
+
+Notice that the students' names are stored in a column called
+`full_name`.
+
+-   Separate the `full_name` column into two new columns, `first_name`
+    and `last_name`, by splitting on the `' '` character .
+
+-   Provide as an extra argument to the `separate()` function
+    `extra ='merge'`. This will ensure that middle names or two-word
+    last names will all end up in the `last_name` column.
+
+-   Save the result to `students`, and view the `head()`.
+
+```{r}
+students <- students %>%
+    # separate into first name and last name
+    separate(full_name , c("first_name" , "last_name"),
+    # separator is "space"
+             sep = ' ' , 
+             extra = 'merge')
+head(students)
+```
+
+# Looking at Data Types
+
+Each column of a data frame can hold items of the same *data type*. The
+data types that R uses are: character, numeric (real or decimal),
+integer, logical, or complex. Often, we want to convert between types so
+that we can do better analysis. If a numerical category like
+`"num_users"` is stored as a vector of `character`s instead of
+`numeric`s, for example, it makes it more difficult to do something like
+make a line graph of users over time.
+
+To see the types of each column of a data frame, we can use:
+
+    str(df)
+
+`str()` displays the internal structure of an R object. Calling `str()`
+with a data frame as an argument will return a variety of information,
+including the data types. For a data frame like this:
+
+| *item*       | *price*  | *calories* |
+|--------------|----------|------------|
+| "banana"     | "\$1"    | 105        |
+| "apple"      | "\$0.75" | 95         |
+| "peach"      | "\$3"    | 55         |
+| "clementine" | "\$2.5"  | 35         |
+
+the data types would be:
+
+    #> $ item:        chr
+    #> $ price:       chr
+    #> $ calories:    num
+
+We can see that the `price` column is made up of `character`s, which
+will probably make our analysis of price more difficult
+
+Let's inspect the data types in the `students` table. by printing out
+the structure of `students`.
+
+```{r}
+# data structure Base R
+str(students)
+```
+
+If we wanted to make a scatterplot of `age` vs average exam score, would
+we be able to do it with this type of data?
+
+Running the code below will give us an error since "age" is non-numeric
+data type
+
+```{r}
+students %>%
+    summarise(mean(age))
+```
+
+# String Parsing
+
+Sometimes we need to modify strings in our data frames to help us
+transform them into more meaningful metrics. For example, in our fruits
+table from before:
+
+| *item*       | *price*  | *calories* |
+|--------------|----------|------------|
+| "banana"     | "\$1"    | 105        |
+| "apple"      | "\$0.75" | 95         |
+| "peach"      | "\$3"    | 55         |
+| "peach"      | "\$4"    | 55         |
+| "clementine" | "\$2.5"  | 35         |
+
+We can see that the `'price'` column is actually composed of character
+strings representing dollar amounts. This column could be much better
+represented as numeric, so that we could take the mean, calculate other
+aggregate statistics, or compare different fruits to one another in
+terms of price.
+
+First, we can use a regular expression, a sequence of characters that
+describe a pattern of text to be matched, to remove all of the dollar
+signs. The base R function `gsub()` will remove the `$` from the `price`
+column, replacing the symbol with an empty string `''`:
+
+    fruit %>%
+      mutate(price=gsub('\\$','',price))
+
+Then, we can use the base R function `as.numeric()` to convert character
+strings containing numerical values to numeric:
+
+    fruit %>%
+      mutate(price = as.numeric(price))
+
+Now, we have a data frame that looks like:
+
+| *item*       | *price* | *calories* |
+|--------------|---------|------------|
+| "banana"     | 1       | 105        |
+| "apple"      | 0.75    | 95         |
+| "peach"      | 3       | 55         |
+| "peach"      | 4       | 55         |
+| "clementine" | 2.5     | 35         |
+
+We saw in the last exercise that finding the mean of the `score` column
+is hard to do when the data is stored as `character`s and not numbers.
+Let us View the `head()` of `students` to take a look at the values in
+the `score` column.
+
+```{r}
+# top 6 rows
+head(students)
+```
+
+Remove the `'%'` symbol from the `score` column, and save the resulting
+data frame to `students`. View `students`.
+
+```{r}
+# remove % sign using gsub() from Base R
+students <- students %>%
+    mutate(score = gsub('\\%' , '' , score))
+
+head(students)
+```
+
+Convert the `score` column to a numerical type using the `as.numeric()`
+function. Save this new data frame to `students`, and view it
+
+```{r}
+# convert score from character to numeric
+students <- students %>%
+    mutate(score = as.numeric(score))
+
+head(students)
+```
+
+Convert the `age` column to a numerical type using the `as.numeric()`
+function into `students`, and view it
+
+```{r}
+# convert age to numeric
+students <- students%>%
+    mutate(age = as.numeric(age))
+
+# view 
+str(students)
+```
+
+# Cleaning US Census Data
+
+You just got hired as a Data Analyst at the Census Bureau, which
+collects census data and finds interesting insights from it.
+
+The person who previously had your job left you all the data they had
+for the most recent census. The data is spread across multiple `csv`
+files. They didn't use R, and they would manually look through these
+`csv` files whenever they wanted to find something. Sometimes they would
+copy and paste certain numbers into Excel for analysis.This is not
+scalable or repeatable for you to dig into the data and find some
+insights by the end of the day.
+
+We have been provided 9 csv files containing census data across states
+of the US.We will review these files and clean the data applying various
+data cleaning methods we have learnt so far.
+
+## Load and Inspect the data
+
+-   Load the desired libraries for Data Cleaning and review a few files
+
+```{r message=FALSE , warning=FALSE}
+# load required libraries for data cleaning 
+library(readr)
+library(tidyr)
+library(dplyr)
+library(stringr)
+```
+
+```{r message=FALSE , warning=FALSE}
+# load 2 files into a data frame
+states_0 <- read_csv("states_0.csv")
+states_1 <- read_csv("states_1.csv")
+
+# inspect head
+head(states_0)
+head(states_1)
+```
+
+It will be easier to inspect the data stored in these files once you
+have it in a data frame.
+
+-   Let us begin by creating a variable called `files` and set it equal
+    to the `list.files()` of all of the `csv` files to import.
+
+-   Read each file in `files` into a data frame using `lapply()` and
+    save the result to `df_list`
+
+-   Concatenate all of the data frames in `df_list` into one data frame
+    called `us_census`
+
+```{r message=FALSE , warning=FALSE}
+# create a list of files with a pattern
+list_files = list.files(pattern = "states_.*csv")
+
+# print the list of files to download
+print(list_files)
+
+# read each file into a data frame using lappy method
+df_list <- lapply(list_files,read_csv)
+
+# combine each data frame by rows i.e. append one after the other "bind_rows"
+us_census <- bind_rows(df_list)
+```
+
+Inspect the `us_census` data frame by printing the column names, looking
+at the data types with `str()`, and viewing the `head()`.
+
+-   What columns have symbols that will prevent calculations?
+
+{Answer : Hispanic , White , Black , Native , Asian , Pacific , Income
+and GenderPop}
+
+-   What are the data types of the columns?
+
+{Answer : Except X1 and Total Pop which are "Numeric" , all other
+columns have "Non-Numeric" Data Types
+
+-   Do any columns contain multiple kinds of information?
+
+{Answer : Column Gender_prop contains Numeric and Text Mixed Data}
+
+```{r}
+str(us_census)
+```
+
+## Remove and Reformat Columns
+
+-   When inspecting `us_census` you notice a column `X1` that stores
+    meaningless information.
+
+-   Drop the `X1` column from `us_census`, and save the resulting data
+    frame to `us_census`. View the head of `us_census`.
+
+```{r}
+# drop column X1
+us_census <- us_census %>%
+    select(-X1)
+
+# inspect
+head(us_census)
+```
+
+-   You notice that there are `6` columns representing the population
+    percentage for different races. The columns include the percent
+    symbol `%`.
+
+-   Remove the percent symbol `%` from each of the race columns
+    (`Hispanic`,`White`,`Black`,`Native`,`Asian`,`Pacific`). Save the
+    resulting data frame to `us_census`, and view the head.
+
+```{r}
+# use gsub() to remove "%" symbol from each column
+us_census <- us_census %>%
+    mutate(Hispanic    = gsub('\\%' , '' , Hispanic) , 
+           White       = gsub('\\%' , '' , White) , 
+           Black       = gsub('\\%' , '' , Black) , 
+           Native      = gsub('\\%' , '' , Native) , 
+           Asian       = gsub('\\%' , '' , Asian) , 
+           Pacific     = gsub('\\%' , '' , Pacific))
+
+# inspect
+head(us_census)
+```
+
+-   The `Income` column also incudes a `$` symbol along with the number
+    representing median income for a state.
+
+-   Remove the `$` from the `Income` column. Save the resulting data
+    frame to `us_census`.
+
+-   View the head of `us_census`.
+
+```{r}
+# remove $ symbol from Income columns
+us_census <- us_census %>%
+    mutate(Income = gsub("\\$" , "" , Income))
+
+# inspect
+head(us_census)
+```
+
+The `GenderPop` column appears to hold the male and female population
+counts.
+
+Separate this column at the `_` character to create two new columns:
+`male_pop` and `female_pop`.
+
+Save the resulting data frame to `us_census`, and view the head.
+
+```{r}
+# use separate() function to seperate the Gender_Prop column
+# separator is "_"
+us_census <- us_census %>%
+    separate(GenderPop,c('male_prop','female_prop'),'_')
+
+# inspect
+head(us_census)
+```
+
+-   You notice the new `male_pop` and `female_pop` columns contain extra
+    characters `M` and `F`, respectively.
+
+-   Remove these extra characters from the columns.
+
+-   Save the resulting data frame to `us_census`, and view the head.
+
+```{r}
+# use gsub() to remove "M" and "F" and replace with "nothing"
+us_census <- us_census %>%
+    # replace "M" from male_prop with ""
+    mutate(male_prop = gsub("M" , "" , male_prop)) %>%
+    # replace "F" from female_prop with ""
+    mutate(female_prop = gsub("F" , "" , female_prop))
+
+# inspect
+head(us_census)
+```
+
+## Update the Data Types
+
+Now that you have removed extra symbols from many of the columns that
+contain numerical data, you notice that the data type for these columns
+is still `chr`, or character.
+
+Convert all of these columns
+(`Hispanic`,`White`,`Black`,`Native`,`Asian`,`Pacific`,`Income`,`male_pop`,`female_pop`)
+to have a data type of numeric. Save the resulting data frame to
+`us_census`, and view the head.
+
+```{r}
+# convert columns to numeric
+us_census <- us_census %>%
+    mutate(Hispanic = as.numeric(Hispanic) , 
+           White    = as.numeric(White) , 
+           Black    = as.numeric(Black) , 
+           Native   = as.numeric(Native) , 
+           Asian    = as.numeric(Asian) , 
+           Pacific  = as.numeric(Pacific) , 
+           male_prop = as.numeric(male_prop) , 
+           female_prop = as.numeric(female_prop),
+           )
+
+# inspect
+str(us_census)
+```
+
+Income column has "Currency with ",". We will use gsub() to remove the
+"," and then convert it to numeric
+
+```{r}
+# remove "," from Income
+us_census <- us_census %>%
+    mutate(Income = gsub('\\,', '', Income)) %>%
+# convert Income to numeric
+    mutate(Income = as.numeric(Income))
+
+# inspect
+str(us_census)
+```
+
+## Remove Duplicate Rows
+
+It's always a good idea to check if there are duplicate rows of data in
+a data set. Pipe `us_census` into the `duplicated()` function to see
+which rows are duplicated. Then pipe the result into `table()` to get a
+count of the duplicated rows.
+
+```{r}
+# check for duplicate rows
+us_census %>%
+    duplicated() %>%
+    table()
+```
+
+We have 9 duplicate rows so now update the value of `us_census` to be
+the `us_census` data frame with only unique rows
+
+Confirm that there are no more duplicated rows in `us_census`. You
+should expect to see no `TRUE`s!
+
+```{r}
+# remove duplicate rows with distinct()
+us_census <- us_census %>%
+    distinct()
+
+# inspect
+str(us_census)
+
+# validate
+us_census %>%
+    duplicated() %>%
+    table()
+```
+
+```{r}
+# final inspection top 6 rows
+head(us_census)
+
+# final inspection bottom 6 rows
+tail(us_census)
+
+# final inspection structure
+str(us_census)
+```
