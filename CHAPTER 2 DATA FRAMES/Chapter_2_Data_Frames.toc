@@ -1,0 +1,18 @@
+\contentsline {section}{Tidyverse}{2}{section*.2}%
+\contentsline {section}{The dplyr package}{2}{section*.3}%
+\contentsline {section}{Key Concepts}{2}{section*.4}%
+\contentsline {subsection}{What is a Data Frame}{2}{section*.5}%
+\contentsline {subsection}{CSVs}{3}{section*.6}%
+\contentsline {subsection}{Loading and Saving CSVs}{3}{section*.7}%
+\contentsline {section}{Inspecting Data Frames}{4}{section*.8}%
+\contentsline {section}{Piping}{6}{section*.9}%
+\contentsline {section}{Selecting Columns}{6}{section*.10}%
+\contentsline {section}{Excluding Columns}{8}{section*.11}%
+\contentsline {section}{Filtering Rows}{9}{section*.12}%
+\contentsline {subsection}{Filtering Rows with Logic I}{9}{section*.13}%
+\contentsline {subsection}{Filtering Rows with Logic II}{11}{section*.14}%
+\contentsline {section}{Arranging Rows}{12}{section*.15}%
+\contentsline {section}{Modifying Data Frames}{15}{section*.16}%
+\contentsline {subsection}{Adding a Column}{15}{section*.17}%
+\contentsline {subsection}{Adding Multiple Columns}{17}{section*.18}%
+\contentsline {subsection}{Rename Columns}{19}{section*.19}%
