@@ -1,0 +1,555 @@
+---
+title: "Chapter_4_Aggregating_Data_With_R"
+author: "Ravi Mummigatti"
+date: "7/7/2021"
+output:
+  pdf_document:
+    toc: yes
+  html_document:
+    toc: yes
+    theme: flatly
+    highlight: tango
+    code_folding: show
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{rsetup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE , cache.lazy = FALSE , warning = FALSE , message = FALSE , fig.width = 8 , fig.height = 5)
+```
+
+# Introduction
+
+In this lesson you will learn about aggregates in R using dplyr.
+
+An aggregate statistic is a way of creating a single number that
+describes a group of numbers. Common aggregate statistics include mean,
+median, and standard deviation.
+
+Additionally, you will learn how you can group data into different
+subsets based on column values. This can help narrow the focus of a
+summary statistic to a subset of a dataset
+
+We will analyze data from ShoeFly.com, a fictional e-commerce shoe
+store. The data includes information regarding customer orders as well
+as the source of page visits to ShoeFly.com's website
+
+# Calculating Column Statistics
+
+In this exercise, you will learn how to *combine* all of the values from
+a column for a single calculation. This can be done with the help of the
+dplyr function `summarize()`, which returns a new data frame containing
+the desired calculation.
+
+Some examples of this type of calculation include:
+
+-   The data frame `customers` contains the names and ages of all of
+    your customers. You want to find the median age:
+
+<!-- -->
+
+    customers %>%
+      select(age)
+    # c(23, 25, 31, 35, 35, 46, 62)
+    customers %>%
+      summarize(median_age = median(age))
+    # 35
+
+-   The data frame `shipments` contains address information for all
+    shipments that you've sent out in the past year. You want to know
+    how many different states you have shipped to.
+
+<!-- -->
+
+    shipments %>%
+      select(states)
+    # c('CA', 'CA', 'CA', 'CA', 'NY', 'NY', 'NJ', 'NJ', 'NJ', 'NJ', 'NJ', 'NJ', 'NJ')
+    shipments %>%
+      summarize(n_distinct_states = n_distinct(states))
+    # 3
+
+-   The data frame `inventory` contains a list of types of t-shirts that
+    your company makes. You want to know the standard deviation of the
+    prices of your inventory.
+
+    inventory %\>%   select(price) \# c(31, 23, 30, 27, 30, 22, 27, 22,
+    39, 27, 36)    inventory %\>%   summarize(sd_price = sd(price)) \#
+    5.465595
+
+The general syntax for these calculations is:
+
+    df %>%
+      summarize(var_name = command(column_name))
+
+-   `df` is the data frame you are working with
+
+-   `summarize` is a dplyr function that reduces multiple values to a
+    single value
+
+-   `var_name` is the name you assign to the column that stores the
+    results of the summary function in the returned data frame
+
+-   `command` is the summary function that is applied to the column by
+    `summarize()`
+
+-   `column_name` is the name of the column of `df` that is being
+    summarized
+
+The following table includes common summary functions that can be given
+as an argument to `summarize()`:
+
++----------------+-----------------------------------+
+| Command        | Description                       |
++================+===================================+
+| `mean()`       | Average of all values in column   |
++----------------+-----------------------------------+
+| `median()`     | Median value of column            |
++----------------+-----------------------------------+
+| `sd()`         | Standard deviation of column      |
++----------------+-----------------------------------+
+| `var()`        | Variance of column                |
++----------------+-----------------------------------+
+| `min()`        | Minimum value in column           |
++----------------+-----------------------------------+
+| `max()`        | Maximum value in column           |
++----------------+-----------------------------------+
+| `IQR()`        | Interquartile range of column     |
++----------------+-----------------------------------+
+| `n_distinct()` | Number of unique values in column |
++----------------+-----------------------------------+
+| `sum()`        | Sum values of column              |
++----------------+-----------------------------------+
+
+Let us load the required libraries for our analysis
+
+```{r message=FALSE , warning=FALSE}
+library(dplyr)
+library(readr)
+library(tidyverse)
+```
+
+Let us load the required data-sets
+
+```{r message=FALSE}
+orders <- read_csv("shoefly.csv")
+page_visits <- read_csv("page_visits.csv")
+```
+
+ShoeFly.com has a new batch of orders stored in the data frame `orders`.
+Inspect the first `10` rows if the data frame using `head()`.
+
+```{r}
+# inspect orders
+head(orders , 10)
+```
+
+Our finance department wants to know the price of the most expensive
+pair of shoes purchased. Save your answer to the variable
+`most_expensive`
+
+```{r}
+# maximum price
+most_expensive <- orders %>%
+  summarize(max_price = max(price))
+
+# view
+most_expensive
+```
+
+The result for the most expensive pair of shoes is coming back as `NA`.
+Why is this happening?
+
+If you View the `orders data frame ,`you can see that there is a missing
+information! It appears that the `price` for row `99` was not in the
+file, and this is causing your maximum value calculation to return `NA`
+
+We add the argument na.rm = True to the max() function to ignore
+"Missing / NA Values"
+
+```{r}
+# maximum price
+orders %>%
+  summarize(max_price = max(price , na.rm = TRUE))
+```
+
+Our fashion department wants to know how many different colors of shoes
+we are selling. Save your answer to the variable `num_colors`
+
+```{r}
+# use n_distinct() on the shoe_color column
+orders %>%
+    summarize(distinct_colors = n_distinct(shoe_color))
+```
+
+# Calculating Aggregate Functions
+
+## Groupby single column and summarize
+
+When we have a bunch of data, we often want to calculate aggregate
+statistics (mean, standard deviation, median, percentiles, etc.) over
+certain subsets of the data.
+
+Suppose we have a grade book with columns `student`, `assignment_name`,
+and `grade`:
+
+| student | assignment_name | grade |
+|---------|-----------------|-------|
+| Amy     | Assignment 1    | 96    |
+| Amy     | Assignment 2    | 87    |
+| Bob     | Assignment 1    | 91    |
+| Bob     | Assignment 2    | 75    |
+| Chris   | Assignment 1    | 83    |
+| Chris   | Assignment 2    | 88    |
+
+We want to get an average grade for each student across all assignments.
+We can do this using the helpful dplyr function `group_by()`.
+
+For this example, we'd use the following piece of code:
+
+    grades <- df %>%
+      group_by(student) %>%
+      summarize(mean_grade = mean(grade))
+
+The output might look something like this:
+
+| student | mean_grade |
+|---------|------------|
+| Amy     | 91.5       |
+| Bob     | 83         |
+| Chris   | 85.5       |
+
+In general, we use the following syntax to calculate aggregates:
+
+    df %>%
+      group_by(column_1) %>%
+      summarize(aggregate_name = command(column_2))
+
+-   `column_1` (`student` in our example) is the column that we want to
+    `group_by()`
+
+-   `column_2` (`grade` in our example) is the column that we want to
+    apply `command()`, a summary function, to using `summarize()`
+
+-   `aggregate_name` is the name assigned to the calculated aggregate
+
+In addition to the summary functions discussed in the last exercise
+(`mean()`, `median()`, `sd()`, `var()`, `min()`, `max()`, `IQR()` and
+`n_distinct()`),
+
+Another helpful summary function, especially for grouped data, is `n()`.
+`n()` will return the count of the rows within a group, and does not
+require a column as an argument. To get the count of the rows in each
+group of students from our example:
+
+    grades <- df %>%
+      group_by(student) %>%
+      summarize(count = n())
+
+Our Finance department wants to know the price of the most expensive
+shoe for each `shoe_type` (i.e., the price of the most expensive boot,
+the price of the most expensive ballet flat, etc.).
+
+Save your answer to the variable `pricey_shoes`, and view it.
+
+```{r}
+# group by shoe_type and summarize max (price)
+orders %>%
+    group_by(shoe_type) %>%
+    summarize(max_price = max(price , na.rm = TRUE))
+```
+
+The inventory team wants to know how many of each `shoe_type` has been
+sold so they can forecast inventory for the future.
+
+Save your answer to the variable `shoes_sold`, and view it.
+
+```{r}
+# groupby shoe_type then summarize count
+orders %>%
+    group_by(shoe_type) %>%
+    summarise(shoes_sold = n())
+```
+
+## Groupby multiple columns and summarize
+
+Sometimes, we want to group by more than one column. We can do this by
+passing multiple column names as arguments to the `group_by` function.
+
+Imagine that we run a chain of stores and have data about the number of
+sales at different locations on different days:
+
+| location     | date       | day_of_week | total_sales |
+|--------------|------------|-------------|-------------|
+| West Village | February 1 | W           | 400         |
+| West Village | February 2 | Th          | 450         |
+| Chelsea      | February 1 | W           | 375         |
+| Chelsea      | February 2 | Th          | 390         |
+| ...          | ...        | ...         | ...         |
+
+We suspect that sales are different at different locations on different
+days of the week. In order to test this hypothesis, we could calculate
+the average sales for each store on each day of the week across multiple
+months.
+
+The code would look like this:
+
+    df %>%
+      group_by(location,day_of_week) %>%
+      summarize(mean_total_sales = mean(total_sales))
+
+And the results might look something like this:
+
+| location     | day_of_week | mean_total_sales |
+|--------------|-------------|------------------|
+| Chelsea      | M           | 402.50           |
+| Chelsea      | Tu          | 422.75           |
+| Chelsea      | W           | 452.00           |
+| ...          | ...         | ...              |
+| West Village | M           | 390              |
+| West Village | Tu          | 400              |
+| ...          | ...         | ...              |
+
+At ShoeFly.com, our Purchasing team thinks that certain
+`shoe_type`/`shoe_color` combinations are particularly popular this year
+(for example, blue ballet flats are all the rage in Paris).
+
+Find the total number of shoes of each `shoe_type`/`shoe_color`
+combination purchased using `group_by`, `summarize()` and `n()`. Save
+your result to the variable `shoe_counts`, and view it.
+
+```{r}
+# groupby shoe_type , shoe_color and summarize n()
+orders %>%
+    group_by(shoe_type , shoe_color) %>%
+    summarise(shoes_sold = n())
+```
+
+The Marketing team wants to better understand the different price levels
+of the kinds of shoes that have been sold on the website, in particular
+looking at `shoe_type`/`shoe_material` combinations.
+
+Find the mean price of each `shoe_type`/`shoe_material` combination
+purchased using `group_by`, `summarize()` and `mean()`. Save your result
+to the variable `shoe_prices`, and view it.
+
+Don't forget to include `na.rm = TRUE` as an argument in the summary
+function that you call!
+
+```{r}
+# groupby shoe_type , shoe_material , summarize mean price
+orders %>%
+    group_by(shoe_type , shoe_material) %>%
+    summarize(avg_price = mean(price , na.rm = TRUE))
+```
+
+# Combining Grouping with Filter
+
+While `group_by()` is most often used with `summarize()` to calculate
+summary statistics, it can also be used with the dplyr function
+`filter()` to filter rows of a data frame based on per-group metrics.
+
+Suppose you work at an educational technology company that offers online
+courses and collects user data in an `enrollments` data frame:
+
+| user_id | course       | quiz_score |
+|---------|--------------|------------|
+| 1234    | learn_r      | 80         |
+| 1234    | learn_python | 95         |
+| 4567    | learn_r      | 90         |
+| 4567    | learn_python | 55         |
+
+You want to identify all the enrollments in difficult courses, which you
+define as courses with an average `quiz_score` less than `80`. To filter
+the data frame to just these rows:
+
+    enrollments %>%
+      group_by(course) %>%
+      filter(mean(quiz_score) < 80)
+
+-   `group_by()` groups the data frame by `course` into two groups:
+    `learn-r` and `learn-python`
+
+-   `filter()` will keep all the rows of the data frame whose per-group
+    (per-course) average `quiz_score` is less than `80`
+
+Rather than filtering rows by the individual column values, the rows
+will be filtered by their group value since a summary function is used!
+The resulting data frame would look like this:
+
+| user_id | course       | quiz_score |
+|---------|--------------|------------|
+| 1234    | learn_python | 95         |
+| 4567    | learn_python | 55         |
+
+-   The average `quiz_score` for the `learn-r` course is `85`, so all
+    the rows of `enrollments` with a value of `learn-r` in the `course`
+    column are filtered out.
+
+-   The average `quiz_score` for the `learn-python` course is `75`, so
+    all the rows of `enrollments` with a value of `learn-python` in the
+    `course` column remain.
+
+ShoeFly.com wants to gain a better insight into the orders of the most
+popular `shoe_types`.
+
+Group `orders` by `shoe_type` and filter to only include orders with a
+`shoe_type` that has been ordered more than `16` times. Save the result
+to `most_pop_orders`, and view it.
+
+You can include any of the summary functions as part of an argument to
+`filter()`, including `n()`!
+
+```{r}
+# groupby shoe_type
+most_popular_orders <- orders %>%
+    group_by(shoe_type) %>%
+# filter count > 16
+    filter(n() > 16)
+
+# view
+head(most_popular_orders)
+```
+
+```{r}
+# groupby shoe_type
+most_popular_orders <- orders %>%
+    group_by(shoe_type) %>%
+# filter count > 16
+    filter(n() > 16)
+
+# view
+head(most_popular_orders)
+```
+
+# Combining Grouping with Mutate
+
+`group_by()` can also be used with the dplyr function `mutate()` to add
+columns to a data frame that involve per-group metrics.
+
+Consider the same educational technology company's `enrollments` table
+from the previous exercise:
+
+| user_id | course       | quiz_score |
+|---------|--------------|------------|
+| 1234    | learn_r      | 80         |
+| 1234    | learn_python | 95         |
+| 4567    | learn_r      | 90         |
+| 4567    | learn_python | 55         |
+
+You want to add a new column to the data frame that stores the
+difference between a row's `quiz_score` and the average `quiz_score` for
+that row's `course`. To add the column:
+
+    enrollments %>% 
+      group_by(course) %>% 
+      mutate(diff_from_course_mean = quiz_score - mean(quiz_score))
+
+-   `group_by()` groups the data frame by course into two groups:
+    `learn-r` and `learn-python`
+
+-   `mutate()` will add a new column `diff_from_course_mean` which is
+    calculated as the difference between a row's individual `quiz_score`
+    and the `mean(quiz_score)` for that row's group (course)
+
+The resulting data frame would look like this:
+
+| user_id | course       | quiz_score | diff_from_course_mean |
+|---------|--------------|------------|-----------------------|
+| 1234    | learn_r      | 80         | -5                    |
+| 1234    | learn_python | 95         | 20                    |
+| 4567    | learn_r      | 90         | 5                     |
+| 4567    | learn_python | 55         | -20                   |
+
+-   The average `quiz_score` for the `learn-r` course is `85`, so
+    `diff_from_course_mean` is calculated as `quiz_score - 85` for all
+    the rows of `enrollments` with a value of `learn-r` in the `course`
+    column.
+
+-   The average `quiz_score` for the `learn-python` course is `75`, so
+    `diff_from_course_mean` is calculated as `quiz_score - 75` for all
+    the rows of `enrollments` with a value of `learn-python` in the
+    `course` column.
+
+You want to be able to tell how expensive each order is compared to the
+average `price` of orders with the same `shoe_type`.
+
+Group `orders` by `shoe_type` and create a new column named
+`diff_from_shoe_type_mean` that stores the difference in price between
+an orders `price` and the average `price` of orders with the same
+`shoe_type`.
+
+Save the result to `diff_from_mean`, and view it.
+
+Don't forget to include `na.rm = TRUE` as an argument in the summary
+function you call!
+
+```{r}
+# groupby shoe_type
+diff_from_mean <- orders %>%
+    group_by(shoe_type) %>%
+# add column diff_from_shoe_type_mean
+    mutate(diff_from_shoe_type_mean = price - mean(price , na.rm = TRUE))
+
+# inspect
+head(diff_from_mean)
+```
+
+# A/B Testing for ShoeFly.com
+
+Our favorite online shoe store, ShoeFly.com is performing an A/B Test.
+They have two different versions of an ad, which they have placed in
+emails, as well as in banner ads on Facebook, Twitter, and Google. They
+want to know how the two ads are performing on each of the different
+platforms on each day of the week. Help them analyze the data using
+aggregate measures.
+
+`ad_clicks` contains the following columns:
+
+-   `user_id`: unique user id
+
+-   `utm_source`: where user saw the ad. **UTM** stands for **U**rchin
+    **T**racking **M**odule
+
+-   `day`: the day the ad was seen
+
+-   `ad_click_timestamp`: the time the ad was clicked
+
+-   `ad_clicked`: boolean indicating if ad was clicked (TRUE or FALSE)
+
+-   `experimental_group`: which ad version was shown (A or B)
+
+## Analyzing Ad Sources
+
+Inspect the first few rows of `ad_clicks` using `head()`. What variables
+are stored in the columns of the data frame?
+
+```{r message=FALSE , warning=FALSE}
+# load packages
+library(readr)
+library(dplyr)
+```
+
+```{r message=FALSE}
+# load data
+ad_clicks = read_csv("add_clicks.csv")
+# inspect data
+head(ad_clicks)
+```
+
+We want to know which ad platform is getting the most views.
+
+How many views (i.e., rows of the data frame) came from each
+`utm_source`?
+
+Group `ad_clicks` by `utm_source` and count the number of rows in each
+group. Save your result to `views_by_utm`, and view it.
+
+```{r}
+# group by utm-source
+views_by_utm <- ad_clicks %>%
+  group_by(utm_source)
+
+# inspect
+views_by_utm
+```
